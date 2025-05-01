@@ -4,8 +4,8 @@ setup(
     name="html-to-markdown",
     version="0.1.0",
     description="A Python package to convert HTML to Markdown",
-    author="Your Name",
-    author_email="your.email@example.com",
+    author="MengAiDev",
+    author_email="3463526515@qq.com",
     packages=find_packages(),
     install_requires=[
         "beautifulsoup4>=4.12.0",
