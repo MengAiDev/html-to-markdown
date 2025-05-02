@@ -1,494 +1,161 @@
-import itertools
-from bs4 import BeautifulSoup
-from typing import Optional
+from bs4 import BeautifulSoup, NavigableString, Comment
+from urllib.parse import quote
 
 class HTMLToMarkdown:
-    def __init__(self, max_depth: int = 100, max_size: int = 10 * 1024 * 1024):
-        """
-        初始化HTML到Markdown转换器
-        
-        Args:
-            max_depth: 最大递归深度，防止堆栈溢出
-            max_size: 最大输入大小（字节），防止内存溢出
-        """
+    def __init__(self, filter_tags=None, max_depth=None, max_size=None):
+        self.filter_tags = filter_tags or ['script', 'style', 'noscript', 'meta', 'link']
         self.max_depth = max_depth
-        self.max_size = max_size
-        self.current_depth = 0
-        
-        # HTML实体映射
-        self.html_entities = {
-            '&lt;': '<',
-            '&gt;': '>',
-            '&amp;': '&',
-            '&quot;': '"',
-            '&apos;': "'",
-            '&nbsp;': ' ',
-            '&copy;': '©',
-            '&reg;': '®',
-            '&trade;': '™',
-            '&mdash;': '—',
-            '&ndash;': '–',
-            '&hellip;': '…'
-        }
-        
-        self.conversion_rules = {
-            'p': self._convert_paragraph,
-            'h1': lambda tag: f'# {self._get_inner_text(tag)}\n',
-            'h2': lambda tag: f'## {self._get_inner_text(tag)}\n',
-            'h3': lambda tag: f'### {self._get_inner_text(tag)}\n',
-            'h4': lambda tag: f'#### {self._get_inner_text(tag)}\n',
-            'h5': lambda tag: f'##### {self._get_inner_text(tag)}\n',
-            'h6': lambda tag: f'###### {self._get_inner_text(tag)}\n',
-            'strong': self._convert_strong,
-            'b': self._convert_strong,
-            'em': self._convert_emphasis,
-            'i': self._convert_emphasis,
-            'a': self._convert_link,
-            'img': self._convert_image,
-            'ul': self._convert_list,
-            'ol': self._convert_list,
-            'li': self._convert_list_item,
-            'code': self._convert_inline_code,
-            'pre': self._convert_code_block,
-            'blockquote': self._convert_blockquote,
-        }
-
-    def convert(self, html: Optional[str]) -> str:
-        """
-        将HTML字符串转换为Markdown格式
-        
-        Args:
-            html: HTML字符串
-            
-        Returns:
-            转换后的Markdown字符串
-            
-        Raises:
-            ValueError: 当输入为None、不是有效的HTML字符串或超过大小限制时
-        """
-        if html is None:
+        self.max_size = max_size or 1000000
+    
+    def convert(self, html_content):
+        if html_content is None:
             raise ValueError("Input HTML cannot be None")
-            
-        if not isinstance(html, str):
+        if not isinstance(html_content, str):
             raise ValueError("Input must be a string")
-            
-        if not html.strip():
+        if self.max_size and len(html_content) > self.max_size:
+            raise ValueError(f"Input HTML exceeds maximum size of {self.max_size} bytes")
+        
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # 预处理
+        for comment in soup.find_all(string=lambda t: isinstance(t, Comment)):
+            comment.extract()
+        for tag in self.filter_tags:
+            for element in soup.find_all(tag):
+                element.decompose()
+                
+        result = self._process_node(soup, depth=0).strip()
+        return result + '\n' if result else ""
+
+    def _process_node(self, node, depth=0, list_stack=None):
+        if self.max_depth is not None and depth > self.max_depth:
             return ""
             
-        # 检查输入大小
-        if len(html.encode('utf-8')) > self.max_size:
-            raise ValueError(f"Input HTML exceeds maximum size of {self.max_size} bytes")
-            
-        try:
-            # 重置递归深度计数器
-            self.current_depth = 0
-            
-            # 解析HTML
-            soup = BeautifulSoup(html, 'html.parser')
-            
-            # 预处理：转换HTML实体
-            for element in soup.find_all(string=True):
-                if element.parent.name not in ['pre', 'code']:
-                    # 直接使用_convert_html_entities方法处理文本内容
-                    element.replace_with(self._convert_html_entities(str(element)))
-            
-            result = ''
-            for child in soup.children:
-                if isinstance(child, str):
-                    text = child.strip()
+        list_stack = list_stack or []
+        output = []
+        current_line = []
+        
+        for child in node.children:
+            if isinstance(child, NavigableString):
+                if not isinstance(child, Comment):
+                    text = self._clean_text(child.string)
                     if text:
-                        result += text + '\n'
-                else:
-                    result += self._process_tag(child)
-                        
-            # 清理最终结果：移除多余的空行，但保留段落之间的空行
-            result = '\n'.join(line for line, _ in itertools.groupby(result.splitlines()))
-            return result.strip() + '\n'
-            
-        except Exception as e:
-            raise ValueError(f"Failed to parse HTML: {str(e)}")
-
-    def _get_inner_text(self, tag) -> str:
-        """获取标签内的文本，同时处理内部的标签"""
-        result = ''
-        last_was_inline = False
-        
-        for child in tag.children:
-            if isinstance(child, str):
-                # 保留原始空格，但移除多余的空格
-                text = ' '.join(child.split())
-                if text:
-                    # 如果前一个元素是内联标签且当前文本不以空格开始，添加空格
-                    if last_was_inline and not text.startswith(' '):
-                        result += ' '
-                    result += text
-                    last_was_inline = True
-                continue
-            
-            child_result = ''
-            is_inline = child.name in ['strong', 'b', 'em', 'i', 'a', 'code']
-            
-            if child.name in self.conversion_rules:
-                child_result = self.conversion_rules[child.name](child)
-                if child_result.endswith('\n'):
-                    child_result = child_result[:-1]
+                        current_line.append(text)
             else:
-                child_result = self._get_inner_text(child)
-            
-            if child_result:
-                # 处理内联标签之间的空格
-                if result and not result.endswith(' ') and not child_result.startswith((' ', '\n')):
-                    # 如果前一个元素是内联标签或当前是内联标签，添加空格
-                    if last_was_inline or is_inline:
-                        result += ' '
-                result += child_result
-                last_was_inline = is_inline
+                # 处理HTML元素
+                result = self._handle_element(child, depth, list_stack)
+                if result:
+                    current_line.append(result)
         
-        # 移除首尾多余的空格，但保留必要的单个空格
-        return ' '.join(result.split())
+        if current_line:
+            output.append(' '.join(current_line))
+        return '\n'.join(output)
 
-    def _is_block_element(self, tag) -> bool:
-        """判断是否是块级元素"""
-        block_elements = {'p', 'div', 'blockquote', 'ul', 'ol', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
-        return tag.name in block_elements
+    def _handle_element(self, element, depth, list_stack):
+        tag = element.name
+        if tag is None:
+            return self._process_inline(element)
 
-    def _convert_html_entities(self, text: str) -> str:
-        """转换HTML实体为对应的Unicode字符"""
-        # 基本HTML实体映射
-        entities = {
-            '&lt;': '<',
-            '&gt;': '>',
-            '&amp;': '&',
-            '&quot;': '"',
-            '&apos;': "'",
-            '&nbsp;': ' ',
-            '&copy;': '©',
-            '&reg;': '®',
-            '&trade;': '™',
-            '&mdash;': '—',
-            '&ndash;': '–',
-            '&hellip;': '…',
-            '&sect;': '§',
-            '&para;': '¶',
-            '&euro;': '€',
-            '&pound;': '£',
-            '&cent;': '¢',
-            '&deg;': '°',
-            '&plusmn;': '±',
-            '&divide;': '÷',
-            '&times;': '×'
+        handlers = {
+            'br': lambda: '  \n',
+            'hr': lambda: '\n---\n\n',
+            'img': lambda: self._handle_img(element),
+            'a': lambda: self._handle_a(element),
+            'strong': lambda: f"**{self._process_inline(element).strip()}**",
+            'b': lambda: f"**{self._process_inline(element).strip()}**",
+            'em': lambda: f"*{self._process_inline(element).strip()}*",
+            'i': lambda: f"*{self._process_inline(element).strip()}*",
+            'code': lambda: self._handle_code(element),
+            'pre': lambda: self._handle_pre(element),
+            'p': lambda: f"{self._process_inline(element)}\n",
+            'blockquote': lambda: self._handle_blockquote(element),
+            'ul': lambda: self._handle_list(element, list_stack, ordered=False),
+            'ol': lambda: self._handle_list(element, list_stack, ordered=True),
+            'li': lambda: self._process_inline(element)
         }
         
-        result = text
-        # 替换命名实体
-        for entity, char in entities.items():
-            result = result.replace(entity, char)
-            
-        # 处理数字实体
-        import re
-        # 处理十进制数字实体
-        result = re.sub(r'&#(\d+);', lambda m: chr(int(m.group(1))), result)
-        # 处理十六进制数字实体
-        result = re.sub(r'&#[xX]([0-9a-fA-F]+);', lambda m: chr(int(m.group(1), 16)), result)
+        for level in range(1, 7):
+            handlers[f'h{level}'] = lambda l=level: f"{'#' * l} {self._process_inline(element).strip()}\n"
         
-        return result
+        handler = handlers.get(tag)
+        return handler() if handler else self._process_node(element, depth, list_stack)
 
-    def _is_inline_element(self, tag) -> bool:
-        """判断是否是内联元素"""
-        inline_elements = {'a', 'strong', 'em', 'code', 'b', 'i', 'img'}
-        return tag.name in inline_elements
-
-    def _format_block_output(self, text: str, tag) -> str:
-        """格式化块级元素的输出，确保正确的换行符"""
-        text = text.rstrip()
-        if not text:
-            return ''
-        if tag.name.startswith('h'):
-            return text + '\n'
-        return text + '\n\n'
-
-    def _process_tag(self, tag) -> str:
-        if isinstance(tag, str):
-            return tag.strip()
-        
-        if tag.name in self.conversion_rules:
-            result = self.conversion_rules[tag.name](tag)
-            
-            # 处理换行符
-            if self._is_block_element(tag):
-                # 块级元素
-                if tag.name.startswith('h'):
-                    # 标题只需要一个换行符
-                    result = result.rstrip() + '\n'
-                elif tag.name in ['p', 'blockquote', 'pre']:
-                    # 段落、引用和代码块需要两个换行符
-                    result = result.rstrip() + '\n\n'
-                else:
-                    # 其他块级元素（列表等）保持原有换行
-                    result = result.rstrip() + '\n'
-            elif self._is_inline_element(tag):
-                # 内联元素不需要换行符
-                result = result.rstrip()
-            
-            return result
-        
-        # 处理未知标签
-        result = ''
-        for child in tag.children:
-            if isinstance(child, str):
-                text = child.strip()
-                if text:
-                    if result and not result.endswith((' ', '\n')):
-                        result += ' '
-                    result += text
-            else:
-                child_result = self._process_tag(child)
-                if child_result:
-                    if result and not (
-                        result.endswith((' ', '\n')) or 
-                        child_result.lstrip().startswith(('*', '`', '[', '!', '\n', '#', '>'))
-                    ):
-                        result += ' '
-                    result += child_result
-                        
-        # 如果是块级元素，确保有正确的换行
-        if self._is_block_element(tag):
-            result = result.rstrip() + '\n\n'
-            
-        return result
-
-    def _convert_paragraph(self, tag) -> str:
-        text = self._get_inner_text(tag)
-        if not text.strip():
-            return ''
-        # 确保段落后面有两个换行符
-        return f'{text}\n\n'
-
-    def _convert_strong(self, tag) -> str:
-        text = self._get_inner_text(tag)
-        return f'**{text}**'
-
-    def _convert_emphasis(self, tag) -> str:
-        text = self._get_inner_text(tag)
-        return f'*{text}*'
-
-    def _escape_markdown(self, text: str) -> str:
-        """
-        转义Markdown特殊字符
-        """
-        special_chars = ['\\', '`', '*', '_', '{', '}', '[', ']', '(', ')', '#', '+', '-', '.', '!']
-        for char in special_chars:
-            text = text.replace(char, '\\' + char)
-        return text
-
-    def _sanitize_url(self, url: str) -> str:
-        """
-        清理和验证URL
-        """
-        if not url:
-            return ''
-        
-        # 移除危险的URL方案
-        dangerous_schemes = ['javascript:', 'data:', 'vbscript:']
-        url_lower = url.lower().strip()
-        for scheme in dangerous_schemes:
-            if url_lower.startswith(scheme):
+    def _handle_code(self, element):
+        """处理代码标签"""
+        code = element.get_text()
+        if element.parent.name == 'pre':
+            lang = ''
+            if element.get('class'):
+                lang = element.get('class')[0].split('-')[-1]
+            if not code.strip():
                 return ''
-                
-        # 转义URL中的特殊字符
-        return url.replace('(', '%28').replace(')', '%29').replace(' ', '%20')
+            return f"```{lang}\n{code.strip()}\n```\n"
+        return f"`{code.replace('`', '\\`')}`"
 
-    def _convert_link(self, tag) -> str:
-        try:
-            text = self._get_inner_text(tag)
-            href = self._sanitize_url(tag.get('href', ''))
-            
-            if not href:
-                return text
-                
-            # 转义文本中的特殊字符
-            text = self._escape_markdown(text)
-            return f'[{text}]({href})'
-        except Exception as e:
-            # 如果链接处理失败，返回原始文本
-            return self._get_inner_text(tag)
+    def _handle_a(self, node):
+        """处理链接标签"""
+        text = self._process_inline(node).strip()
+        href = node.get('href', '')
+        if not href or href.startswith('javascript:'):
+            return text
+        return f"[{text}]({quote(href, safe='/:#.')})"
 
-    def _convert_image(self, tag) -> str:
-        try:
-            alt = self._escape_markdown(tag.get('alt', ''))
-            src = self._sanitize_url(tag.get('src', ''))
-            
-            if not src:
-                return ''
-                
-            title = tag.get('title', '')
-            if title:
-                title = f' "{self._escape_markdown(title)}"'
-            
-            return f'![{alt}]({src}{title})'
-        except Exception as e:
-            # 如果图片处理失败，返回空字符串
+    def _handle_img(self, node):
+        """处理图片标签"""
+        alt = node.get('alt', '')
+        src = node.get('src', '')
+        if not src or src.startswith('data:'):
             return ''
+        return f"![{alt}]({src})"
 
-    def _convert_list(self, tag, indent_level: int = 0) -> str:
-        """
-        转换HTML列表为Markdown格式，支持嵌套列表
+    def _handle_list(self, element, stack, ordered):
+        """处理列表"""
+        items = []
+        indent = '    ' * len(stack)
+        new_stack = stack + [{'ordered': ordered}]
         
-        Args:
-            tag: BeautifulSoup标签对象
-            indent_level: 当前缩进级别
-            
-        Returns:
-            转换后的Markdown文本
-        """
-        # 检查递归深度
-        self.current_depth += 1
-        if self.current_depth > self.max_depth:
-            self.current_depth -= 1
-            return self._get_inner_text(tag) + '\n'
-            
-        try:
-            result = ''
-            for item in tag.find_all('li', recursive=False):
-                result += self._convert_list_item(item, is_ordered=tag.name == 'ol', indent_level=indent_level)
-                
-            self.current_depth -= 1
-            return result
-            
-        except Exception as e:
-            self.current_depth -= 1
-            return self._get_inner_text(tag) + '\n'
+        for i, item in enumerate(element.find_all('li', recursive=False)):
+            prefix = f"{i+1}. " if ordered else "- "
+            content = self._process_node(item, len(new_stack), new_stack).strip()
+            items.append(f"{indent}{prefix}{content}")
+        
+        return '\n'.join(items) + '\n'
 
-    def _convert_list_item(self, tag, is_ordered=False, indent_level: int = 0) -> str:
-        """
-        转换列表项，支持嵌套列表
-        
-        Args:
-            tag: BeautifulSoup标签对象
-            is_ordered: 是否是有序列表
-            indent_level: 当前缩进级别
-            
-        Returns:
-            转换后的Markdown文本
-        """
-        try:
-            # 创建缩进
-            indent = '    ' * indent_level
-            prefix = '1. ' if is_ordered else '- '
-            
-            # 处理列表项的主要内容
-            content_parts = []
-            for child in tag.children:
-                if isinstance(child, str):
-                    text = child.strip()
+    def _process_inline(self, element):
+        """处理行内元素"""
+        parts = []
+        for child in element.children:
+            if isinstance(child, NavigableString):
+                if not isinstance(child, Comment):
+                    text = self._clean_text(child.string)
                     if text:
-                        content_parts.append(text)
-                elif child.name in ('ul', 'ol'):
-                    # 处理嵌套列表
-                    nested_list = self._convert_list(child, indent_level + 1)
-                    if nested_list:
-                        content_parts.append('\n' + nested_list.rstrip())
-                else:
-                    # 处理其他标签
-                    processed = self._process_tag(child)
-                    if processed:
-                        content_parts.append(processed.rstrip())
-            
-            # 组合内容
-            content = ' '.join(part for part in content_parts if part)
-            
-            # 处理多行内容的缩进
-            if '\n' in content:
-                lines = content.split('\n')
-                content = lines[0] + '\n' + '\n'.join(
-                    '    ' + line if line.strip() else line
-                    for line in lines[1:]
-                )
-            
-            return f'{indent}{prefix}{content}\n'
-            
-        except Exception as e:
-            return f'{indent}{prefix}{self._get_inner_text(tag)}\n'
+                        parts.append(text)
+            else:
+                result = self._handle_element(child, 0, [])
+                if result:
+                    parts.append(result.rstrip())
+        return ' '.join(part.strip() for part in parts if part.strip())
 
-    def _convert_code_block(self, tag) -> str:
-        """
-        转换代码块，保持原始格式并支持语言标识
-        """
-        # 获取代码内容
-        if tag.code:
-            code_tag = tag.code
-        else:
-            code_tag = tag
+    def _handle_blockquote(self, node):
+        content = self._process_node(node).strip()
+        return '\n'.join(f"> {line}" for line in content.split('\n')) + '\n\n'
 
-        # 从class属性中提取语言标识符
-        language = ''
-        classes = code_tag.get('class', [])
-        for cls in classes:
-            if cls.startswith(('language-', 'lang-')):
-                language = cls.split('-')[1]
-                break
+    def _handle_pre(self, node):
+        code = node.find('code')
+        lang = code.get('class', [''])[0].split('-')[-1] if code else ''
+        return f"```{lang}\n{code.get_text().strip()}\n```\n\n"
 
-        # 获取代码内容，保持原始格式
-        code = code_tag.get_text(strip=False)
-        
-        # 如果代码为空，返回空字符串
-        if not code.strip():
-            return ''
-            
-        # 处理代码中的HTML实体，但不转义Markdown字符
-        code = self._convert_html_entities(code)
-        
-        # 移除开头和结尾的空行，但保留中间的空行和缩进
-        lines = code.splitlines()
-        while lines and not lines[0].strip():
-            lines.pop(0)
-        while lines and not lines[-1].strip():
-            lines.pop()
-            
-        if not lines:
-            return ''
-            
-        code = '\n'.join(lines)
-        
-        # 返回代码块，确保前后有正确的换行
-        return f'```{language}\n{code}\n```\n\n'
+    def _clean_text(self, text):
+        """清理文本"""
+        if not text:
+            return ""
+        # 保留换行符
+        lines = text.strip().split('\n')
+        lines = [' '.join(line.split()) for line in lines if line.strip()]
+        return '\n\n'.join(lines)
 
-    def _convert_inline_code(self, tag) -> str:
-        """
-        转换内联代码，正确处理特殊字符和格式
-        """
-        # 获取代码内容，保留原始格式
-        code = tag.get_text(strip=False)
-        
-        # 处理HTML实体
-        code = self._convert_html_entities(code)
-        
-        # 移除首尾空白字符，但保留中间的空格
-        code = code.strip()
-        
-        # 如果代码为空，返回空字符串
-        if not code:
-            return ''
-            
-        # 转义代码中的反引号
-        code = code.replace('`', '\\`')
-        
-        # 确保代码块前后没有空格
-        return f'`{code}`'
-
-    def _convert_html_entities(self, text: str) -> str:
-        """转换HTML实体为对应的Unicode字符"""
-        result = text
-        for entity, char in self.html_entities.items():
-            result = result.replace(entity, char)
-        # 处理数字实体
-        import re
-        result = re.sub(r'&#(\d+);', lambda m: chr(int(m.group(1))), result)
-        result = re.sub(r'&#x([0-9a-fA-F]+);', lambda m: chr(int(m.group(1), 16)), result)
-        return result
-
-    def _convert_blockquote(self, tag) -> str:
-        content = self._get_inner_text(tag)
-        if not content.strip():
-            return ''
-        return f'> {content}\n\n'
+# 动态添加标题标签处理方法
+for level in range(1, 7):
+    def handler(self, node, level=level):
+        return f"\n{'#' * level} {self._process_inline(node)}\n\n"
+    setattr(HTMLToMarkdown, f'_handle_h{level}', handler)

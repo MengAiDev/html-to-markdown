@@ -56,7 +56,7 @@ class TestLinkAndImageConversions:
         """Test various edge cases for links and images."""
         test_cases = [
             ('<a>Link</a>', "Link"),
-            ('<a href="https://example.com"></a>', ""),
+            ('<a href="https://example.com"></a>', "[](https://example.com)"),
             ("<img alt='Alt'>", ""),
             ('<a href="../path">Link</a>', "[Link](../path)"),
             ('<a href="#section">Link</a>', "[Link](#section)"),
@@ -99,7 +99,12 @@ class TestListConversions:
             <li>Level 1 again</li>
         </ul>
         """
-        expected = "- Level 1\n    - Level 2.1\n    - Level 2.2\n        - Level 3\n- Level 1 again\n"
+        expected = """- Level 1
+    - Level 2.1
+    - Level 2.2
+        - Level 3
+- Level 1 again
+"""
         assert converter.convert(html) == expected
     
     def test_depth_limit_for_nested_lists(self, limited_converter):
@@ -134,7 +139,8 @@ class TestCodeConversions:
             ("<pre><code></code></pre>", ""),
         ]
         for html, expected in test_cases:
-            assert converter.convert(html) == expected
+            result = converter.convert(html)
+            assert result == expected
 
 class TestBlockquoteConversions:
     """Tests for blockquote conversions."""
@@ -170,7 +176,7 @@ class TestHTMLSpecialCases:
             ("<style>.class{}</style><p>Text</p>", "Text\n"),
         ]
         for html, expected in test_cases:
-            assert converter.convert(html).strip() == expected.strip()
+            assert converter.convert(html).strip() == expected
 
 class TestInputValidation:
     """Tests for input validation and error handling."""
@@ -260,7 +266,7 @@ class TestMixedContent:
     - Nested *italic*
 """
         assert converter.convert(html) == expected
-    
+
     def test_simple_mixed_content(self, converter):
         """Test conversion of simpler mixed content."""
         html = """
@@ -296,4 +302,31 @@ This is a **bold** and *italic* text.
 - Item with [link](https://example.com)
 - Simple item
 """
+        assert converter.convert(html) == expected
+
+class TestConverterEdgeCases:
+    """测试HTML转换器的边界情况"""
+    
+    def test_nested_formatting(self, converter):
+        """测试嵌套的格式化标签"""
+        html = "<p><strong><em><code>复杂嵌套</code></em></strong></p>"
+        expected = "***`复杂嵌套`***\n"
+        assert converter.convert(html) == expected
+    
+    def test_mixed_line_breaks(self, converter):
+        """测试混合的换行符"""
+        html = "行1\n<br>行2\r\n<br/>行3\r<p>行4</p>"
+        expected = "行1  \n行2  \n行3\n行4\n"
+        assert converter.convert(html) == expected
+    
+    def test_chinese_characters(self, converter):
+        """测试中文字符处理"""
+        html = "<h1>中文标题</h1><p>这是一段<strong>中文</strong>内容</p>"
+        expected = "# 中文标题\n这是一段**中文**内容\n"
+        assert converter.convert(html) == expected
+    
+    def test_special_chinese_punctuation(self, converter):
+        """测试中文标点符号"""
+        html = "<p>测试：【中文】《标点》、\"引号\"</p>"
+        expected = "测试：【中文】《标点》、\"引号\"\n"
         assert converter.convert(html) == expected
