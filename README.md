@@ -55,4 +55,4 @@ FAILED html_to_markdown/tests/test_converter.py::TestConverterEdgeCases::test_ch
 ```
 
 ## 贡献
-欢迎任何issue和PR。开发者是一名小学生，时间不算充裕，请谅解。
+欢迎任何issue和PR。
