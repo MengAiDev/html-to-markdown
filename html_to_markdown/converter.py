@@ -17,7 +17,7 @@ class HTMLToMarkdown:
         
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # 预处理
+        # Preprocessing
         for comment in soup.find_all(string=lambda t: isinstance(t, Comment)):
             comment.extract()
         for tag in self.filter_tags:
@@ -42,7 +42,7 @@ class HTMLToMarkdown:
                     if text:
                         current_line.append(text)
             else:
-                # 处理HTML元素
+                # Process HTML elements
                 result = self._handle_element(child, depth, list_stack)
                 if result:
                     current_line.append(result)
@@ -81,7 +81,7 @@ class HTMLToMarkdown:
         return handler() if handler else self._process_node(element, depth, list_stack)
 
     def _handle_code(self, element):
-        """处理代码标签"""
+        """Process code tags"""
         code = element.get_text()
         if element.parent.name == 'pre':
             lang = ''
@@ -93,7 +93,7 @@ class HTMLToMarkdown:
         return f"`{code.replace('`', '\\`')}`"
 
     def _handle_a(self, node):
-        """处理链接标签"""
+        """Process anchor tags"""
         text = self._process_inline(node).strip()
         href = node.get('href', '')
         if not href or href.startswith('javascript:'):
@@ -101,7 +101,7 @@ class HTMLToMarkdown:
         return f"[{text}]({quote(href, safe='/:#.')})"
 
     def _handle_img(self, node):
-        """处理图片标签"""
+        """Process image tags"""
         alt = node.get('alt', '')
         src = node.get('src', '')
         if not src or src.startswith('data:'):
@@ -109,7 +109,7 @@ class HTMLToMarkdown:
         return f"![{alt}]({src})"
 
     def _handle_list(self, element, stack, ordered):
-        """处理列表"""
+        """Process lists"""
         items = []
         indent = '    ' * len(stack)
         new_stack = stack + [{'ordered': ordered}]
@@ -122,7 +122,7 @@ class HTMLToMarkdown:
         return '\n'.join(items) + '\n'
 
     def _process_inline(self, element):
-        """处理行内元素"""
+        """Process inline elements"""
         parts = []
         for child in element.children:
             if isinstance(child, NavigableString):
@@ -146,15 +146,15 @@ class HTMLToMarkdown:
         return f"```{lang}\n{code.get_text().strip()}\n```\n\n"
 
     def _clean_text(self, text):
-        """清理文本"""
+        """Clean up text"""
         if not text:
             return ""
-        # 保留换行符
+        # Preserve line breaks
         lines = text.strip().split('\n')
         lines = [' '.join(line.split()) for line in lines if line.strip()]
         return '\n\n'.join(lines)
 
-# 动态添加标题标签处理方法
+# Dynamically add heading tag handlers
 for level in range(1, 7):
     def handler(self, node, level=level):
         return f"\n{'#' * level} {self._process_inline(node)}\n\n"

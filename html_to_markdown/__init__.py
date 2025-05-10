@@ -3,14 +3,14 @@ from . import cli
 
 def convert_html_to_markdown(html: str, **kwargs) -> str:
     """
-    将HTML字符串转换为Markdown格式
+    Convert HTML string to Markdown format
     
     Args:
-        html: HTML字符串
-        **kwargs: 传递给HTMLToMarkdown构造函数的参数
+        html: HTML string
+        **kwargs: Parameters to pass to HTMLToMarkdown constructor
         
     Returns:
-        转换后的Markdown字符串
+        Converted Markdown string
     """
     converter = HTMLToMarkdown(**kwargs)
     return converter.convert(html)
