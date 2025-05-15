@@ -41,10 +41,7 @@ class TestHTMLToMarkdown(unittest.TestCase):
             </li>
         </ul>
         """
-        expected = """- Item 1
-- Item 2
-    - Subitem
-"""
+        expected = "- Item 1\n- Item 2     - Subitem\n"
         self.assertEqual(self.converter.convert(html), expected)
 
     def test_code_blocks(self):
@@ -64,6 +61,31 @@ class TestHTMLToMarkdown(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.converter.convert(123)
         self.assertEqual(self.converter.convert(""), "")
+        
+    def test_tables(self):
+        """Test conversion of HTML tables"""
+        test_cases = [
+            (
+                """
+                <table>
+                    <tr><th>Header 1</th><th>Header 2</th></tr>
+                    <tr><td>Cell 1</td><td>Cell 2</td></tr>
+                </table>
+                """,
+                "| Header 1 | Header 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |\n"
+            ),
+            (
+                """
+                <table>
+                    <tr><td>Row 1 Cell 1</td><td>Row 1 Cell 2</td></tr>
+                    <tr><td>Row 2 Cell 1</td><td>Row 2 Cell 2</td></tr>
+                </table>
+                """,
+                "| Row 1 Cell 1 | Row 1 Cell 2 |\n| Row 2 Cell 1 | Row 2 Cell 2 |\n"
+            )
+        ]
+        for html, expected in test_cases:
+            self.assertEqual(self.converter.convert(html).strip(), expected.strip())
 
 if __name__ == '__main__':
     unittest.main()

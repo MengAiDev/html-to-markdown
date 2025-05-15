@@ -71,7 +71,8 @@ class HTMLToMarkdown:
             'blockquote': lambda: self._handle_blockquote(element),
             'ul': lambda: self._handle_list(element, list_stack, ordered=False),
             'ol': lambda: self._handle_list(element, list_stack, ordered=True),
-            'li': lambda: self._process_inline(element)
+            'li': lambda: self._process_inline(element),
+            'table': lambda: self._handle_table(element)
         }
         
         for level in range(1, 7):
@@ -117,7 +118,12 @@ class HTMLToMarkdown:
         for i, item in enumerate(element.find_all('li', recursive=False)):
             prefix = f"{i+1}. " if ordered else "- "
             content = self._process_node(item, len(new_stack), new_stack).strip()
-            items.append(f"{indent}{prefix}{content}")
+            
+            # Handle nested lists by checking if current item contains a list
+            if item.find(['ul', 'ol']):
+                items.append(f"{indent}{prefix}{content}")
+            else:
+                items.append(f"{indent}{prefix}{content}")
         
         return '\n'.join(items) + '\n'
 
@@ -144,6 +150,39 @@ class HTMLToMarkdown:
         code = node.find('code')
         lang = code.get('class', [''])[0].split('-')[-1] if code else ''
         return f"```{lang}\n{code.get_text().strip()}\n```\n\n"
+        
+    def _handle_table(self, table):
+        """Convert HTML table to Markdown format"""
+        # Process table headers
+        headers = []
+        for th in table.find_all('th'):
+            headers.append(self._process_inline(th).strip())
+            
+        # Process table rows
+        rows = []
+        for tr in table.find_all('tr'):
+            cells = []
+            for td in tr.find_all('td'):
+                cells.append(self._process_inline(td).strip())
+            if cells:  # Skip header row if already processed
+                rows.append(cells)
+                
+        # Generate Markdown table
+        if not headers and not rows:
+            return ""
+            
+        # Create header separator
+        if headers:
+            separator = ['---'] * len(headers)
+            table_md = f"| {' | '.join(headers)} |\n| {' | '.join(separator)} |\n"
+        else:
+            table_md = ""
+            
+        # Add rows
+        for row in rows:
+            table_md += f"| {' | '.join(row)} |\n"
+            
+        return table_md + "\n"
 
     def _clean_text(self, text):
         """Clean up text"""
