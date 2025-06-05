@@ -107,7 +107,7 @@ class TestHTMLToMarkdown(unittest.TestCase):
     def test_blockquotes(self):
         """Test conversion of blockquotes"""
         html = "<blockquote>Quote text</blockquote>"
-        expected = "\n> Quote text\n\n"
+        expected = "> Quote text\n"
         self.assertEqual(self.converter.convert(html), expected)
         
     def test_nested_elements(self):

@@ -49,3 +49,6 @@ python -m unittest
 
 ## Contributing
 Issues and Pull Requests are welcome.
+
+## License
+MIT License. See LICENSE for more information.
