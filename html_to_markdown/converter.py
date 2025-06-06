@@ -206,32 +206,33 @@ class HTMLToMarkdown:
         
         for i, item in enumerate(node.find_all('li', recursive=False)):
             prefix = f"{i+1}. " if ordered else "- "
+            # 在列表项内容之前添加正确的缩进
             content = self._process_node(item, depth + 1, new_stack).strip()
             
-            # 修复：正确处理嵌套列表格式
-            if content.startswith(('- ', '* ', '1. ', '2. ', '3. ')):
-                items.append(f"{'    ' * indent_level}{prefix}{content}")
+            # 处理任务列表项
+            if '[x]' in content[:4] or '[ ]' in content[:4]:
+                items.append(f"{'    ' * indent_level}{content}")
             else:
+                # 普通列表项
                 items.append(f"{'    ' * indent_level}{prefix}{content}")
         
         return '\n'.join(items) + '\n\n'
 
     def _handle_li(self, node, depth, list_stack):
-        # Handle checkbox for task lists
-        checkbox = node.find('input', {'type': 'checkbox'})
+        # 检查是否为任务列表项
+        checkbox = node.find('input', type='checkbox')
         if checkbox:
-            checked = 'x' if checkbox.get('checked') else ' '
-            content = self._process_inline(node).strip()
-            indent = "    " * (len(list_stack) - 1)
-            return f"{indent}- [{checked}] {content}\n"
+            # 移除复选框元素
+            checkbox.decompose()
+            # 确定复选框状态
+            is_checked = checkbox.has_attr('checked')
+            # 处理剩余内容
+            content = self._process_node(node, depth, list_stack).strip()
+            # 返回任务列表格式
+            return f"[{'x' if is_checked else ' '}] {content}"
             
-        # Normal list item
-        content = self._process_inline(node).strip()
-        if not content:
-            return ""
-            
-        indent = "    " * (len(list_stack) - 1)
-        return f"{indent}- {content}\n"
+        # 对于普通列表项，直接处理内容
+        return self._process_node(node, depth, list_stack)
 
     def _handle_blockquote(self, node, *args):
         content = self._process_node(node).strip()
