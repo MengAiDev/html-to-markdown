@@ -9,6 +9,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         "beautifulsoup4>=4.12.0",
+        lxml>=4.9.3
     ],
     python_requires=">=3.7",
     classifiers=[
