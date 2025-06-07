@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="html-to-markdown",
-    version="0.1.0",
+    version="2025.6.7",
     description="A Python package to convert HTML to Markdown",
     author="MengAiDev",
     author_email="3463526515@qq.com",

@@ -42,7 +42,6 @@ print(markdown)
 
 ## Benchmark
 ```sh
-pip install -r benchmark/requirements.txt
 python benchmark/benchmark.py 
 ```
 
@@ -64,10 +63,35 @@ Note: Times are for 100 conversions (lower is better)
 ```
 
 ## Tests
-Test framework change from `pytest` to `unittest`!
+Test framework: `unittest`
 Run the tests:
 ```bash
 python -m unittest
+```
+
+## Fixing Issues
+```
+........F...
+======================================================================
+FAIL: test_lists (html_to_markdown.tests.test_converter.TestHTMLToMarkdown.test_lists)
+Test conversion of lists
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspaces/html-to-markdown/html_to_markdown/tests/test_converter.py", line 49, in test_lists
+    self.assertEqual(self.converter.convert(html), expected)
+AssertionError: '- Item 1\n- Item 2    - Subitem\n' != '- Item 1\n- Item 2\n    - Subitem\n\n'
+  - Item 1
+- - Item 2    - Subitem
++ - Item 2
++     - Subitem
++ 
+
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.012s
+
+FAILED (failures=1)
+
 ```
 
 ## Contributing
