@@ -1,5 +1,6 @@
 import sys
 import argparse
+from html2text import HTML2Text
 from .converter import HTMLToMarkdown
 
 def main():
@@ -35,10 +36,18 @@ def main():
 
     try:
         html_content = args.input.read()
-        converter = HTMLToMarkdown(
-            filter_tags=args.filter_tags,
-        )
-        markdown = converter.convert(html_content)
+        
+        # If file size is small, use HTML2Text for simplicity
+        if len(html_content.encode('utf-8')) <= 5 * 1024:
+            h2t = HTML2Text()
+            h2t.ignore_links = False
+            markdown = h2t.handle(html_content)
+        else:
+            converter = HTMLToMarkdown(
+                filter_tags=args.filter_tags,
+            )
+            markdown = converter.convert(html_content)
+            
         args.output.write(markdown)
     except KeyboardInterrupt:
         sys.exit(130)

@@ -40,7 +40,7 @@ class HTMLToMarkdown:
             'td': self._handle_td,
         }
         
-        # 修复：为标题处理函数添加额外参数支持
+        # Fix: Add extra parameter support for title handling functions
         for level in range(1, 7):
             self.handlers[f'h{level}'] = lambda node, *args, l=level: self._handle_heading(node, l)
 
@@ -106,7 +106,7 @@ class HTMLToMarkdown:
         return self._process_node(element, depth + 1, list_stack)
 
     # ====================
-    # 标签处理函数 (修复多个问题)
+    # Tag Handlers (Fix multiple issues)
     # ====================
     def _handle_br(self, node, *args):
         return '  \n'
@@ -168,7 +168,7 @@ class HTMLToMarkdown:
         if not href or href.startswith('javascript:'):
             return text
             
-        # 修复：直接使用属性名而不加"data-"前缀
+        # Fix: Directly use the attribute name without the "data-" prefix
         data_attrs = ' '.join(
             f'{k}="{v}"' for k, v in node.attrs.items() 
             if k.startswith('data-') and k not in ['data-src', 'data-original'] and v
@@ -206,32 +206,20 @@ class HTMLToMarkdown:
         
         for i, item in enumerate(node.find_all('li', recursive=False)):
             prefix = f"{i+1}. " if ordered else "- "
-            # 在列表项内容之前添加正确的缩进
+            # Add correct indentation before list item content
             content = self._process_node(item, depth + 1, new_stack).strip()
             
-            # 处理任务列表项
+            # Handle task list items
             if '[x]' in content[:4] or '[ ]' in content[:4]:
                 items.append(f"{'    ' * indent_level}{content}")
             else:
-                # 普通列表项
+                # Regular list item
                 items.append(f"{'    ' * indent_level}{prefix}{content}")
         
         return '\n'.join(items) + '\n\n'
 
     def _handle_li(self, node, depth, list_stack):
-        # 检查是否为任务列表项
-        checkbox = node.find('input', type='checkbox')
-        if checkbox:
-            # 移除复选框元素
-            checkbox.decompose()
-            # 确定复选框状态
-            is_checked = checkbox.has_attr('checked')
-            # 处理剩余内容
-            content = self._process_node(node, depth, list_stack).strip()
-            # 返回任务列表格式
-            return f"[{'x' if is_checked else ' '}] {content}"
-            
-        # 对于普通列表项，直接处理内容
+        # Directly process list item content
         return self._process_node(node, depth, list_stack)
 
     def _handle_blockquote(self, node, *args):
@@ -239,7 +227,7 @@ class HTMLToMarkdown:
         if not content:
             return ""
         quoted = '\n'.join(f"> {line}" for line in content.split('\n'))
-        # 修复：确保块引用有正确的换行
+        # Fix: Ensure block quotes have correct line breaks
         return f"\n{quoted}\n\n"
 
     def _handle_table(self, node, *args):
@@ -253,7 +241,7 @@ class HTMLToMarkdown:
             headers.append(self._process_inline(th).strip())
             align = th.get('align', '').lower()
             align_map = {'left': ':--', 'right': '--:', 'center': ':-:'}
-            # 修复：添加默认对齐方式
+            # Fix: Add default alignment
             alignments.append(align_map.get(align, '---'))
         
         rows = []
@@ -280,7 +268,7 @@ class HTMLToMarkdown:
         return ""
 
     # ====================
-    # 辅助方法 (修复空格处理)
+    # Helper Methods (Fix space handling)
     # ====================
     def _process_inline(self, element):
         parts = []
@@ -289,14 +277,14 @@ class HTMLToMarkdown:
                 if not isinstance(child, Comment):
                     text = self._clean_text(child.string)
                     if text:
-                        # 优化：更智能的空格处理
+                        # Optimize: More intelligent space handling
                         if parts and not parts[-1].endswith((' ', '\n', '>', '(', '[', '{')):
                             parts.append(' ')
                         parts.append(text)
             else:
                 result = self._handle_element(child, 0, [])
                 if result:
-                    # 优化：移除多余空格
+                    # Optimize: Remove redundant spaces
                     if parts and parts[-1].endswith(' ') and result.startswith(' '):
                         result = result.lstrip()
                     parts.append(result)
@@ -306,17 +294,17 @@ class HTMLToMarkdown:
         if not text:
             return ""
         
-        # 保留中文间的空格
+        # Preserve spaces between Chinese characters
         text = re.sub(r'([\u4e00-\u9fa5])\s+([\u4e00-\u9fa5])', r'\1\2', text)
         
-        # 压缩连续空格但保留换行
+        # Compress consecutive spaces but keep line breaks
         text = re.sub(r'[ \t]{2,}', ' ', text)
         
-        # 移除开头/结尾空格
+        # Remove leading/trailing spaces
         text = text.strip()
         
-        # 转换特殊空格
+        # Convert special spaces
         text = text.replace('\u00a0', ' ')  # &nbsp;
-        text = text.replace('\u200b', '')   # 零宽空格
+        text = text.replace('\u200b', '')   # zero-width space
         
         return text

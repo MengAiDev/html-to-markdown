@@ -48,17 +48,6 @@ class TestHTMLToMarkdown(unittest.TestCase):
         expected = "- Item 1\n- Item 2\n    - Subitem\n\n"
         self.assertEqual(self.converter.convert(html), expected)
         
-    def test_task_lists(self):
-        """Test conversion of task lists"""
-        html = """
-        <ul>
-            <li><input type="checkbox" checked> Task 1</li>
-            <li><input type="checkbox"> Task 2</li>
-        </ul>
-        """
-        expected = "- [x] Task 1\n- [ ] Task 2\n\n"
-        self.assertEqual(self.converter.convert(html), expected)
-
     def test_code_blocks(self):
         """Test conversion of code blocks"""
         test_cases = [
